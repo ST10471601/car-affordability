@@ -383,11 +383,14 @@ describe("purchaseSchema", () => {
     },
   );
 
-  it("accepts an interest rate of one basis point", () => {
-    expect(
-      issuesOf(purchaseSchema, { ...financePurchase, annualRateBps: 1 }),
-    ).toEqual([]);
-  });
+  it.each([0, 1, 10_000])(
+    "accepts an interest rate of %s basis points",
+    (annualRateBps) => {
+      expect(
+        issuesOf(purchaseSchema, { ...financePurchase, annualRateBps }),
+      ).toEqual([]);
+    },
+  );
 
   it("reports every term rule a value breaks", () => {
     expect(
@@ -478,16 +481,16 @@ describe("purchaseSchema", () => {
       message: "Term is required.",
     },
     {
-      name: "a zero interest rate",
-      input: { ...financePurchase, annualRateBps: 0 },
+      name: "a negative interest rate",
+      input: { ...financePurchase, annualRateBps: -1 },
       path: ["annualRateBps"],
-      message: "Interest rate must be greater than 0%.",
+      message: "Interest rate must be between 0% and 100%.",
     },
     {
-      name: "a negative interest rate",
-      input: { ...financePurchase, annualRateBps: -100 },
+      name: "an interest rate above 100%",
+      input: { ...financePurchase, annualRateBps: 10_001 },
       path: ["annualRateBps"],
-      message: "Interest rate must be greater than 0%.",
+      message: "Interest rate must be between 0% and 100%.",
     },
     {
       name: "a fractional interest rate",

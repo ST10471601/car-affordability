@@ -4,7 +4,7 @@ import { basisPoints, cents } from "./money";
 const MIN_TERM_MONTHS = 12;
 const MAX_TERM_MONTHS = 84;
 const TERM_MONTHS_STEP = 12;
-const MAX_BALLOON_BPS = 10_000;
+const MAX_PERCENTAGE_BPS = 10_000;
 const MAX_EARNERS = 2;
 
 function requiredInteger(label: string) {
@@ -99,7 +99,8 @@ export const cashPurchaseSchema = z.object({
   method: z.literal("cash"),
 });
 
-const balloonRangeMessage = `Balloon must be between 0% and ${MAX_BALLOON_BPS / 100}%.`;
+const balloonRangeMessage = `Balloon must be between 0% and ${MAX_PERCENTAGE_BPS / 100}%.`;
+const interestRateRangeMessage = `Interest rate must be between 0% and ${MAX_PERCENTAGE_BPS / 100}%.`;
 const termRangeMessage = `Term must be between ${MIN_TERM_MONTHS} and ${MAX_TERM_MONTHS} months.`;
 
 export const financePurchaseSchema = z.object({
@@ -107,14 +108,15 @@ export const financePurchaseSchema = z.object({
   depositCents: nonNegativeCents("Deposit"),
   balloonBps: requiredInteger("Balloon percentage")
     .min(0, balloonRangeMessage)
-    .max(MAX_BALLOON_BPS, balloonRangeMessage)
+    .max(MAX_PERCENTAGE_BPS, balloonRangeMessage)
     .transform(basisPoints),
   termMonths: requiredInteger("Term")
     .min(MIN_TERM_MONTHS, termRangeMessage)
     .max(MAX_TERM_MONTHS, termRangeMessage)
     .multipleOf(TERM_MONTHS_STEP, "Term must be a whole number of years."),
   annualRateBps: requiredInteger("Interest rate")
-    .positive("Interest rate must be greater than 0%.")
+    .min(0, interestRateRangeMessage)
+    .max(MAX_PERCENTAGE_BPS, interestRateRangeMessage)
     .transform(basisPoints),
 });
 

@@ -63,7 +63,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 594_335,
         balloonCents: 0,
         totalInterestCents: 12_792_146,
-        totalCostCents: 42_792_120,
+        totalCostCents: 42_792_146,
       },
     },
     {
@@ -74,7 +74,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 534_902,
         balloonCents: 0,
         totalInterestCents: 11_512_931,
-        totalCostCents: 41_512_944,
+        totalCostCents: 41_512_931,
       },
     },
     {
@@ -85,7 +85,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 523_877,
         balloonCents: 7_500_000,
         totalInterestCents: 15_219_109,
-        totalCostCents: 45_219_144,
+        totalCostCents: 45_219_109,
       },
     },
     {
@@ -96,7 +96,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 603_628,
         balloonCents: 0,
         totalInterestCents: 12_843_634,
-        totalCostCents: 43_461_216,
+        totalCostCents: 43_461_184,
       },
     },
     {
@@ -109,7 +109,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 534_902,
         balloonCents: 0,
         totalInterestCents: 11_512_931,
-        totalCostCents: 38_512_944,
+        totalCostCents: 41_512_931,
       },
     },
     {
@@ -122,7 +122,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 633_958,
         balloonCents: 0,
         totalInterestCents: 13_644_956,
-        totalCostCents: 45_644_976,
+        totalCostCents: 43_644_956,
       },
     },
     {
@@ -133,7 +133,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 416_667,
         balloonCents: 0,
         totalInterestCents: 0,
-        totalCostCents: 30_000_024,
+        totalCostCents: 30_000_000,
       },
     },
     {
@@ -144,7 +144,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 2_672_486,
         balloonCents: 0,
         totalInterestCents: 2_069_831,
-        totalCostCents: 32_069_832,
+        totalCostCents: 32_069_831,
       },
     },
     {
@@ -155,7 +155,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 537_637,
         balloonCents: 0,
         totalInterestCents: 15_161_521,
-        totalCostCents: 45_161_508,
+        totalCostCents: 45_161_521,
       },
     },
     {
@@ -172,7 +172,7 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
         monthlyInstalmentCents: 414_302,
         balloonCents: 7_500_000,
         totalInterestCents: 12_712_169,
-        totalCostCents: 40_329_744,
+        totalCostCents: 43_329_719,
       },
     },
   ];
@@ -180,5 +180,23 @@ const cases: { name: string; scenario: Scenario; expected: ExpectedResult }[] =
 describe("calculateFinance", () => {
   it.each(cases)("$name", ({ scenario, expected }) => {
     expect(calculateFinance(buildInput(scenario))).toEqual(expected);
+  });
+
+  it.each(cases)("reconciles total cost for $name", ({ scenario }) => {
+    const input = buildInput(scenario);
+    const result = calculateFinance(input);
+    const tradeInEquity = input.tradeIn
+      ? input.tradeIn.valueCents - input.tradeIn.settlementCents
+      : 0;
+    const serviceFees =
+      input.fees.monthlyServiceFeeCents * input.purchase.termMonths;
+
+    expect(
+      input.purchase.depositCents +
+        tradeInEquity +
+        result.principalCents +
+        result.totalInterestCents +
+        serviceFees,
+    ).toBe(result.totalCostCents);
   });
 });

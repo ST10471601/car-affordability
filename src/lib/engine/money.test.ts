@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   annualToMonthlyCents,
+  applyBasisPoints,
   basisPoints,
+  basisPointsToRate,
   cents,
   randsToCents,
   roundToCents,
@@ -105,6 +107,31 @@ describe("annualToMonthlyCents", () => {
     "converts $annual annual cents to $expected monthly cents",
     ({ annual, expected }) => {
       expect(annualToMonthlyCents(cents(annual))).toBe(expected);
+    },
+  );
+});
+
+describe("basisPointsToRate", () => {
+  it.each([
+    { bps: 0, expected: 0 },
+    { bps: 1_250, expected: 0.125 },
+    { bps: 10_000, expected: 1 },
+  ])("converts $bps basis points to $expected", ({ bps, expected }) => {
+    expect(basisPointsToRate(basisPoints(bps))).toBe(expected);
+  });
+});
+
+describe("applyBasisPoints", () => {
+  it.each([
+    { amount: 30_000_000, bps: 2_500, expected: 7_500_000 },
+    { amount: 5_000, bps: 1, expected: 0.5 },
+    { amount: 1, bps: 5_000, expected: 0.5 },
+    { amount: 333, bps: 3_333, expected: 110.9889 },
+    { amount: 30_000_000, bps: 0, expected: 0 },
+  ])(
+    "applies $bps basis points to $amount exactly",
+    ({ amount, bps, expected }) => {
+      expect(applyBasisPoints(amount, basisPoints(bps))).toBe(expected);
     },
   );
 });

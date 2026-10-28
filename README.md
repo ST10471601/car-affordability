@@ -7,6 +7,8 @@
 
 ## Getting started
 
+After cloning, run `git config core.hooksPath .githooks` to enable the repository's Git hooks.
+
 ```sh
 pnpm install
 pnpm dev

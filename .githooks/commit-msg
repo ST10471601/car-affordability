@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+message_file=$1
+filtered_file="$message_file.filtered"
+
+awk '
+  {
+    line = tolower($0)
+    if (line ~ /^[[:space:]]*co-authored-by:.*<noreply@anthropic\.com>[[:space:]]*$/) next
+    if (line ~ /generated with \[?claude code/) next
+    lines[++count] = $0
+  }
+  END {
+    while (count > 0 && lines[count] ~ /^[[:space:]]*$/) count--
+    for (i = 1; i <= count; i++) print lines[i]
+  }
+' "$message_file" > "$filtered_file"
+
+mv "$filtered_file" "$message_file"

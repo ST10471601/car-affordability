@@ -13,6 +13,11 @@ export type FinanceScenario = {
   tradeIn?: { valueCents: number; settlementCents: number };
 };
 
+export const wesbankCalculatorFees = {
+  initiationFeeCents: 120_750,
+  monthlyServiceFeeCents: 6_900,
+} satisfies FinanceScenario;
+
 export function buildFinanceInput({
   priceCents = 30_000_000,
   modelYear = 2024,

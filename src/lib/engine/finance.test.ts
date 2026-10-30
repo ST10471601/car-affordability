@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { calculateFinance } from "./finance";
-import { buildFinanceInput, type FinanceScenario } from "./finance.fixtures";
+import {
+  buildFinanceInput,
+  wesbankCalculatorFees,
+  type FinanceScenario,
+} from "./finance.fixtures";
 
 type ExpectedResult = {
   principalCents: number;
@@ -158,5 +162,40 @@ describe("calculateFinance", () => {
         result.totalInterestCents +
         serviceFees,
     ).toBe(result.totalCostCents);
+  });
+
+  describe("matches WesBank vehicle finance calculator (checked 2026-10-30)", () => {
+    const quote = {
+      priceCents: 30_000_000,
+      termMonths: 72,
+      annualRateBps: 1_250,
+      ...wesbankCalculatorFees,
+    } satisfies FinanceScenario;
+
+    it.each<{
+      name: string;
+      scenario: FinanceScenario;
+      expected: { monthlyInstalmentCents: number; balloonCents?: number };
+    }>([
+      {
+        name: "R6,036.28 a month with no deposit or balloon",
+        scenario: {},
+        expected: { monthlyInstalmentCents: 603_628 },
+      },
+      {
+        name: "R5,441.94 a month with a 10% deposit",
+        scenario: { depositCents: 3_000_000 },
+        expected: { monthlyInstalmentCents: 544_194 },
+      },
+      {
+        name: "R5,331.69 a month and R75,000 at the end with a 25% balloon",
+        scenario: { balloonBps: 2_500 },
+        expected: { monthlyInstalmentCents: 533_169, balloonCents: 7_500_000 },
+      },
+    ])("R300,000 at 12.5% over 72 months: $name", ({ scenario, expected }) => {
+      expect(
+        calculateFinance(buildFinanceInput({ ...quote, ...scenario })),
+      ).toMatchObject(expected);
+    });
   });
 });

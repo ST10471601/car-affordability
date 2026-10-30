@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
+  affordabilityValues,
+  cashPurchase,
+  financedPurchase,
+} from "./affordability.fixtures";
+import {
   buildRunningCostInput,
   runningCostRates,
 } from "./running-costs/running-costs.fixtures";
 import {
+  affordabilityInputSchema,
   expenseSchema,
   financeFeesSchema,
   frequencySchema,
@@ -141,7 +147,45 @@ describe("incomeSchema", () => {
     expect(incomeSchema.parse(income)).toEqual(income);
   });
 
+  it.each([
+    {
+      name: "exactly R1,000 a month",
+      earners: [{ amountCents: 100_000, frequency: "monthly" }],
+    },
+    {
+      name: "R12,000 a year",
+      earners: [{ amountCents: 1_200_000, frequency: "annual" }],
+    },
+    {
+      name: "a joint income where one earner earns nothing",
+      earners: [
+        { amountCents: 0, frequency: "monthly" },
+        { amountCents: 100_000, frequency: "monthly" },
+      ],
+    },
+  ])("accepts $name", ({ earners }) => {
+    expect(issuesOf(incomeSchema, { earners })).toEqual([]);
+  });
+
   expectRejections(incomeSchema, [
+    {
+      name: "no income",
+      input: { earners: [{ amountCents: 0, frequency: "monthly" }] },
+      path: [],
+      message: "Net monthly income must be at least R1,000.",
+    },
+    {
+      name: "an income just below R1,000 a month",
+      input: { earners: [{ amountCents: 99_999, frequency: "monthly" }] },
+      path: [],
+      message: "Net monthly income must be at least R1,000.",
+    },
+    {
+      name: "an annual income just below R1,000 a month",
+      input: { earners: [{ amountCents: 1_199_988, frequency: "annual" }] },
+      path: [],
+      message: "Net monthly income must be at least R1,000.",
+    },
     {
       name: "no earners",
       input: { earners: [] },
@@ -997,6 +1041,133 @@ describe("verdictThresholdsSchema", () => {
       input: undefined,
       path: [],
       message: "Enter the verdict thresholds.",
+    },
+  ]);
+});
+
+describe("affordabilityInputSchema", () => {
+  it("accepts a financed purchase with its fees", () => {
+    expect(affordabilityInputSchema.parse(affordabilityValues)).toEqual(
+      affordabilityValues,
+    );
+  });
+
+  it("accepts a cash purchase with an ownership period", () => {
+    const values = { ...affordabilityValues, purchase: cashPurchase };
+    expect(affordabilityInputSchema.parse(values)).toEqual(values);
+  });
+
+  it.each([
+    {
+      name: "a trade-in",
+      overrides: { tradeIn: { valueCents: 8_000_000, settlementCents: 0 } },
+    },
+    { name: "no expenses", overrides: { expenses: [] } },
+    {
+      name: "a service plan and insurance override",
+      overrides: {
+        usage: {
+          ...affordabilityValues.usage,
+          servicePlan: { remainingMonths: 24, remainingKm: 60_000 },
+          insuranceMonthlyOverrideCents: 85_000,
+        },
+      },
+    },
+  ])("accepts $name", ({ overrides }) => {
+    expect(
+      issuesOf(affordabilityInputSchema, {
+        ...affordabilityValues,
+        ...overrides,
+      }),
+    ).toEqual([]);
+  });
+
+  it("ignores running cost fields derived from the vehicle and purchase", () => {
+    expect(
+      affordabilityInputSchema.parse({
+        ...affordabilityValues,
+        usage: {
+          ...affordabilityValues.usage,
+          vehicleValueCents: 1,
+          vehicleAgeYearsAtPurchase: 9,
+          ownershipMonths: 1,
+        },
+      }).usage,
+    ).toEqual(affordabilityValues.usage);
+  });
+
+  expectRejections(affordabilityInputSchema, [
+    {
+      name: "an income below R1,000 a month",
+      input: {
+        ...affordabilityValues,
+        income: { earners: [{ amountCents: 0, frequency: "monthly" }] },
+      },
+      path: ["income"],
+      message: "Net monthly income must be at least R1,000.",
+    },
+    {
+      name: "missing expenses",
+      input: { ...affordabilityValues, expenses: undefined },
+      path: ["expenses"],
+      message: "Enter your expenses.",
+    },
+    {
+      name: "a cash purchase without an ownership period",
+      input: { ...affordabilityValues, purchase: { method: "cash" } },
+      path: ["purchase", "ownershipMonths"],
+      message: "Ownership period is required.",
+    },
+    {
+      name: "a cash purchase owned for longer than 240 months",
+      input: {
+        ...affordabilityValues,
+        purchase: { ...cashPurchase, ownershipMonths: 241 },
+      },
+      path: ["purchase", "ownershipMonths"],
+      message: "Ownership period must be between 1 and 240 months.",
+    },
+    {
+      name: "a financed purchase without fees",
+      input: {
+        ...affordabilityValues,
+        purchase: { ...financedPurchase, fees: undefined },
+      },
+      path: ["purchase", "fees"],
+      message: "Enter the finance fees.",
+    },
+    {
+      name: "an unknown purchase method",
+      input: { ...affordabilityValues, purchase: { method: "lease" } },
+      path: ["purchase", "method"],
+      message: "Choose cash or finance.",
+    },
+    {
+      name: "missing usage",
+      input: { ...affordabilityValues, usage: undefined },
+      path: ["usage"],
+      message: "Enter the running cost details.",
+    },
+    {
+      name: "negative kilometres per month",
+      input: {
+        ...affordabilityValues,
+        usage: { ...affordabilityValues.usage, kmPerMonth: -1 },
+      },
+      path: ["usage", "kmPerMonth"],
+      message: "Monthly distance cannot be negative.",
+    },
+    {
+      name: "a missing current year",
+      input: { ...affordabilityValues, currentYear: undefined },
+      path: ["currentYear"],
+      message: "Current year is required.",
+    },
+    {
+      name: "missing input",
+      input: undefined,
+      path: [],
+      message: "Enter the affordability details.",
     },
   ]);
 });

@@ -1,5 +1,5 @@
 import { annualToMonthlyCents, cents, type Cents } from "./money";
-import type { Expense, Income, RecurringAmount } from "./schemas";
+import type { Expense, RecurringAmount } from "./schemas";
 
 export function toMonthlyCents({
   amountCents,
@@ -14,7 +14,11 @@ function sumCents(amounts: readonly Cents[]): Cents {
   return cents(amounts.reduce((total, amount) => total + amount, 0));
 }
 
-export function calculateNetMonthlyIncome({ earners }: Income): Cents {
+export function calculateNetMonthlyIncome({
+  earners,
+}: {
+  earners: readonly RecurringAmount[];
+}): Cents {
   return sumCents(earners.map(toMonthlyCents));
 }
 

@@ -6,6 +6,8 @@ import {
   basisPointsToRate,
   cents,
   randsToCents,
+  ratioInBasisPointsRoundedDown,
+  ratioInBasisPointsRoundedUp,
   roundToCents,
 } from "./money";
 
@@ -134,4 +136,54 @@ describe("applyBasisPoints", () => {
       expect(applyBasisPoints(amount, basisPoints(bps))).toBe(expected);
     },
   );
+});
+
+describe("ratioInBasisPointsRoundedUp", () => {
+  it.each([
+    { part: 199_900, whole: 1_000_000, expected: 1_999 },
+    { part: 59_999, whole: 300_000, expected: 2_000 },
+    { part: 60_001, whole: 300_000, expected: 2_001 },
+    { part: 1_000_000, whole: 1_000_000, expected: 10_000 },
+    { part: 0, whole: 300_000, expected: 0 },
+    { part: -1, whole: 300_000, expected: 0 },
+    { part: -300_000, whole: 1_000_000, expected: -3_000 },
+  ])(
+    "expresses $part of $whole as $expected basis points",
+    ({ part, whole, expected }) => {
+      expect(ratioInBasisPointsRoundedUp(cents(part), cents(whole))).toBe(
+        expected,
+      );
+    },
+  );
+
+  it("rejects a zero whole", () => {
+    expect(() => ratioInBasisPointsRoundedUp(cents(1), cents(0))).toThrow(
+      RangeError,
+    );
+  });
+});
+
+describe("ratioInBasisPointsRoundedDown", () => {
+  it.each([
+    { part: 149_900, whole: 1_000_000, expected: 1_499 },
+    { part: 44_999, whole: 300_000, expected: 1_499 },
+    { part: 45_001, whole: 300_000, expected: 1_500 },
+    { part: 1_000_000, whole: 1_000_000, expected: 10_000 },
+    { part: 0, whole: 300_000, expected: 0 },
+    { part: -1, whole: 300_000, expected: -1 },
+    { part: -300_000, whole: 1_000_000, expected: -3_000 },
+  ])(
+    "expresses $part of $whole as $expected basis points",
+    ({ part, whole, expected }) => {
+      expect(ratioInBasisPointsRoundedDown(cents(part), cents(whole))).toBe(
+        expected,
+      );
+    },
+  );
+
+  it("rejects a zero whole", () => {
+    expect(() => ratioInBasisPointsRoundedDown(cents(1), cents(0))).toThrow(
+      RangeError,
+    );
+  });
 });

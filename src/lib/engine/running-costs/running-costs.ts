@@ -64,7 +64,7 @@ function averageOf(
   return roundToCents(total / months.length);
 }
 
-function summariseRunningCosts(
+export function summariseRunningCosts(
   input: RunningCostInput,
   rates: RunningCostRates,
 ): RunningCostsResult {

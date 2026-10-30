@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { calculateNetMonthlyIncome } from "./budget";
 import { basisPoints, cents } from "./money";
 
 const MIN_TERM_MONTHS = 12;
@@ -6,6 +7,7 @@ const MAX_TERM_MONTHS = 84;
 const TERM_MONTHS_STEP = 12;
 const MAX_PERCENTAGE_BPS = 10_000;
 const MAX_EARNERS = 2;
+const MIN_NET_MONTHLY_INCOME_CENTS = 100_000;
 const MIN_OWNERSHIP_MONTHS = 1;
 const MAX_OWNERSHIP_MONTHS = 240;
 const MAX_INSURANCE_RATE = 1;
@@ -33,6 +35,18 @@ function nonNegativeCents(label: string) {
   return nonNegativeInteger(label).transform(cents);
 }
 
+function percentageBps(label: string) {
+  const rangeMessage = `${label} must be between 0% and ${MAX_PERCENTAGE_BPS / 100}%.`;
+  return requiredInteger(label)
+    .min(0, rangeMessage)
+    .max(MAX_PERCENTAGE_BPS, rangeMessage)
+    .transform(basisPoints);
+}
+
+const onlyWhenValid = {
+  when: (payload: z.core.ParsePayload) => payload.issues.length === 0,
+};
+
 export const frequencySchema = z.enum(["monthly", "annual"], {
   error: "Choose monthly or annual.",
 });
@@ -45,15 +59,24 @@ export const recurringAmountSchema = z.object(
   { error: "Enter an amount and how often it occurs." },
 );
 
-export const incomeSchema = z.object(
-  {
-    earners: z
-      .array(recurringAmountSchema, { error: "Add at least one earner." })
-      .min(1, "Add at least one earner.")
-      .max(MAX_EARNERS, `Income can include at most ${MAX_EARNERS} earners.`),
-  },
-  { error: "Enter your income." },
-);
+export const incomeSchema = z
+  .object(
+    {
+      earners: z
+        .array(recurringAmountSchema, { error: "Add at least one earner." })
+        .min(1, "Add at least one earner.")
+        .max(MAX_EARNERS, `Income can include at most ${MAX_EARNERS} earners.`),
+    },
+    { error: "Enter your income." },
+  )
+  .refine(
+    (income) =>
+      calculateNetMonthlyIncome(income) >= MIN_NET_MONTHLY_INCOME_CENTS,
+    {
+      message: "Net monthly income must be at least R1,000.",
+      ...onlyWhenValid,
+    },
+  );
 
 export const expenseCategorySchema = z.enum([
   "rentOrBond",
@@ -242,6 +265,10 @@ export const servicePlanSchema = z.object(
 
 const ownershipRangeMessage = `Ownership period must be between ${MIN_OWNERSHIP_MONTHS} and ${MAX_OWNERSHIP_MONTHS} months.`;
 
+const ownershipMonthsSchema = requiredInteger("Ownership period")
+  .min(MIN_OWNERSHIP_MONTHS, ownershipRangeMessage)
+  .max(MAX_OWNERSHIP_MONTHS, ownershipRangeMessage);
+
 export const runningCostInputSchema = z.object(
   {
     powertrain: powertrainSchema,
@@ -254,14 +281,86 @@ export const runningCostInputSchema = z.object(
       .transform(cents),
     vehicleAgeYearsAtPurchase: nonNegativeInteger("Vehicle age"),
     kmPerMonth: nonNegativeInteger("Monthly distance"),
-    ownershipMonths: requiredInteger("Ownership period")
-      .min(MIN_OWNERSHIP_MONTHS, ownershipRangeMessage)
-      .max(MAX_OWNERSHIP_MONTHS, ownershipRangeMessage),
+    ownershipMonths: ownershipMonthsSchema,
     servicePlan: servicePlanSchema.nullable(),
     insuranceMonthlyOverrideCents:
       nonNegativeCents("Insurance premium").optional(),
   },
   { error: "Enter the running cost details." },
+);
+
+export const verdictThresholdsSchema = z.object(
+  {
+    carCostShare: z
+      .object(
+        {
+          comfortableBelowBps: percentageBps(
+            "Comfortable car cost share limit",
+          ),
+          unaffordableAboveBps: percentageBps(
+            "Unaffordable car cost share limit",
+          ),
+        },
+        { error: "Enter the car cost share thresholds." },
+      )
+      .refine(
+        ({ comfortableBelowBps, unaffordableAboveBps }) =>
+          comfortableBelowBps <= unaffordableAboveBps,
+        {
+          message:
+            "The comfortable car cost share limit cannot exceed the unaffordable limit.",
+          path: ["comfortableBelowBps"],
+          ...onlyWhenValid,
+        },
+      ),
+    buffer: z
+      .object(
+        {
+          comfortableFromBps: percentageBps("Comfortable buffer limit"),
+          unaffordableBelowBps: percentageBps("Unaffordable buffer limit"),
+        },
+        { error: "Enter the buffer thresholds." },
+      )
+      .refine(
+        ({ comfortableFromBps, unaffordableBelowBps }) =>
+          comfortableFromBps >= unaffordableBelowBps,
+        {
+          message:
+            "The comfortable buffer limit cannot be below the unaffordable limit.",
+          path: ["comfortableFromBps"],
+          ...onlyWhenValid,
+        },
+      ),
+  },
+  { error: "Enter the verdict thresholds." },
+);
+
+export const vehicleUsageSchema = runningCostInputSchema.omit({
+  vehicleValueCents: true,
+  vehicleAgeYearsAtPurchase: true,
+  ownershipMonths: true,
+});
+
+export const affordabilityPurchaseSchema = z.discriminatedUnion(
+  "method",
+  [
+    cashPurchaseSchema.extend({ ownershipMonths: ownershipMonthsSchema }),
+    financePurchaseSchema.extend({ fees: financeFeesSchema }),
+  ],
+  { error: "Choose cash or finance." },
+);
+
+export const affordabilityInputSchema = z.object(
+  {
+    income: incomeSchema,
+    expenses: z.array(expenseSchema, { error: "Enter your expenses." }),
+    vehicle: vehicleSchema,
+    tradeIn: tradeInSchema.optional(),
+    purchase: affordabilityPurchaseSchema,
+    usage: vehicleUsageSchema,
+    currentYear: requiredInteger("Current year"),
+  },
+  { error: "Enter the affordability details." },
 );
 
 export type Frequency = z.infer<typeof frequencySchema>;
@@ -282,3 +381,7 @@ export type MaintenanceAgeBand = z.infer<typeof maintenanceAgeBandSchema>;
 export type RunningCostRates = z.infer<typeof runningCostRatesSchema>;
 export type ServicePlan = z.infer<typeof servicePlanSchema>;
 export type RunningCostInput = z.infer<typeof runningCostInputSchema>;
+export type VerdictThresholds = z.infer<typeof verdictThresholdsSchema>;
+export type VehicleUsage = z.infer<typeof vehicleUsageSchema>;
+export type AffordabilityPurchase = z.infer<typeof affordabilityPurchaseSchema>;
+export type AffordabilityInput = z.infer<typeof affordabilityInputSchema>;

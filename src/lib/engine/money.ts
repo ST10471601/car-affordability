@@ -5,8 +5,8 @@ export type Cents = number & { readonly [centsBrand]: true };
 export type BasisPoints = number & { readonly [basisPointsBrand]: true };
 
 export const MONTHS_PER_YEAR = 12;
+export const CENTS_PER_RAND = 100;
 
-const CENTS_PER_RAND = 100;
 const BASIS_POINTS_PER_UNIT = 10_000;
 
 export function cents(value: number): Cents {
@@ -46,4 +46,30 @@ export function basisPointsToRate(value: BasisPoints): number {
 
 export function applyBasisPoints(amount: number, rate: BasisPoints): number {
   return (amount * rate) / BASIS_POINTS_PER_UNIT;
+}
+
+function divideRoundingDown(dividend: number, divisor: number): number {
+  const remainder = dividend % divisor;
+  const quotient = (dividend - remainder) / divisor;
+  return remainder < 0 ? quotient - 1 : quotient;
+}
+
+function divideRoundingUp(dividend: number, divisor: number): number {
+  const remainder = dividend % divisor;
+  const quotient = (dividend - remainder) / divisor;
+  return remainder > 0 ? quotient + 1 : quotient;
+}
+
+export function ratioInBasisPointsRoundedUp(
+  part: Cents,
+  whole: Cents,
+): BasisPoints {
+  return basisPoints(divideRoundingUp(part * BASIS_POINTS_PER_UNIT, whole));
+}
+
+export function ratioInBasisPointsRoundedDown(
+  part: Cents,
+  whole: Cents,
+): BasisPoints {
+  return basisPoints(divideRoundingDown(part * BASIS_POINTS_PER_UNIT, whole));
 }

@@ -621,6 +621,19 @@ describe("runningCostRatesSchema", () => {
     ).toEqual([]);
   });
 
+  it("accepts a consumption uplift and insurance rate at their maximums", () => {
+    expect(
+      issuesOf(runningCostRatesSchema, {
+        ...runningCostRates,
+        consumptionUpliftBpsByPowertrain: {
+          ...runningCostRates.consumptionUpliftBpsByPowertrain,
+          petrol: 30_000,
+        },
+        insuranceAnnualRateBps: 10_000,
+      }),
+    ).toEqual([]);
+  });
+
   expectRejections(runningCostRatesSchema, [
     {
       name: "a region without fuel prices",
@@ -655,39 +668,69 @@ describe("runningCostRatesSchema", () => {
       name: "a powertrain without a consumption uplift",
       input: {
         ...runningCostRates,
-        consumptionUpliftByPowertrain: {
-          petrol: 0.15,
-          diesel: 0.1,
-          hybrid: 0.25,
-          electric: 0.2,
+        consumptionUpliftBpsByPowertrain: {
+          petrol: 1_500,
+          diesel: 1_000,
+          hybrid: 2_500,
+          electric: 2_000,
         },
       },
-      path: ["consumptionUpliftByPowertrain", "plugInHybrid"],
+      path: ["consumptionUpliftBpsByPowertrain", "plugInHybrid"],
       message: "Consumption uplift is required.",
     },
     {
       name: "a negative consumption uplift",
       input: {
         ...runningCostRates,
-        consumptionUpliftByPowertrain: {
-          ...runningCostRates.consumptionUpliftByPowertrain,
-          electric: -0.05,
+        consumptionUpliftBpsByPowertrain: {
+          ...runningCostRates.consumptionUpliftBpsByPowertrain,
+          electric: -500,
         },
       },
-      path: ["consumptionUpliftByPowertrain", "electric"],
+      path: ["consumptionUpliftBpsByPowertrain", "electric"],
       message: "Consumption uplift cannot be negative.",
     },
     {
-      name: "a negative insurance rate",
-      input: { ...runningCostRates, insuranceAnnualRateOfValue: -0.01 },
-      path: ["insuranceAnnualRateOfValue"],
-      message: "Insurance rate must be between 0 and 1.",
+      name: "a fractional consumption uplift",
+      input: {
+        ...runningCostRates,
+        consumptionUpliftBpsByPowertrain: {
+          ...runningCostRates.consumptionUpliftBpsByPowertrain,
+          petrol: 1_500.5,
+        },
+      },
+      path: ["consumptionUpliftBpsByPowertrain", "petrol"],
+      message: "Enter a valid consumption uplift.",
     },
     {
-      name: "an insurance rate above 1",
-      input: { ...runningCostRates, insuranceAnnualRateOfValue: 1.01 },
-      path: ["insuranceAnnualRateOfValue"],
-      message: "Insurance rate must be between 0 and 1.",
+      name: "a consumption uplift above 300%",
+      input: {
+        ...runningCostRates,
+        consumptionUpliftBpsByPowertrain: {
+          ...runningCostRates.consumptionUpliftBpsByPowertrain,
+          petrol: 30_001,
+        },
+      },
+      path: ["consumptionUpliftBpsByPowertrain", "petrol"],
+      message: "Consumption uplift must be between 0% and 300%.",
+    },
+    {
+      name: "a negative insurance rate",
+      input: { ...runningCostRates, insuranceAnnualRateBps: -1 },
+      path: ["insuranceAnnualRateBps"],
+      message: "Insurance rate must be between 0% and 100%.",
+    },
+    {
+      name: "a fractional insurance rate",
+      input: { ...runningCostRates, insuranceAnnualRateBps: 400.5 },
+      path: ["insuranceAnnualRateBps"],
+      message: "Enter a valid insurance rate.",
+    },
+    {
+      name: "an insurance rate above 100%",
+      input: { ...runningCostRates, insuranceAnnualRateBps: 10_001 },
+      path: ["insuranceAnnualRateBps"],
+      message: "Insurance rate must be between 0% and 100%.",
     },
     {
       name: "no maintenance bands",

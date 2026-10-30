@@ -1,4 +1,4 @@
-import { roundToCents, type Cents } from "../money";
+import { basisPointsToRate, roundToCents, type Cents } from "../money";
 import type {
   FuelPrices,
   Powertrain,
@@ -27,9 +27,12 @@ function energyPriceCents(
 
 function realWorldConsumption(
   { powertrain, claimedConsumption }: RunningCostInput,
-  { consumptionUpliftByPowertrain }: RunningCostRates,
+  { consumptionUpliftBpsByPowertrain }: RunningCostRates,
 ): number {
-  return claimedConsumption * (1 + consumptionUpliftByPowertrain[powertrain]);
+  const uplift = basisPointsToRate(
+    consumptionUpliftBpsByPowertrain[powertrain],
+  );
+  return claimedConsumption * (1 + uplift);
 }
 
 export function calculateMonthlyFuel(

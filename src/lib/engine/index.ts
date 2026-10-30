@@ -12,12 +12,17 @@ export {
 export type { FinanceResult } from "./finance";
 export type {
   FinanceError,
+  FinanceErrorCode,
   FinanceIssue,
   FinanceIssueCode,
   FinanceRules,
   FinanceValidation,
   FinanceWarning,
 } from "./finance-rules";
+export type {
+  MaxAffordablePrice,
+  PriceLimit,
+} from "./max-price/find-max-affordable-price";
 export type { BasisPoints, Cents } from "./money";
 export {
   calculateRunningCosts,

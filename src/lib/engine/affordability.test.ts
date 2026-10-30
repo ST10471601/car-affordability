@@ -57,7 +57,7 @@ describe("evaluateAffordability", () => {
         runningCosts: { totalMonthlyAverageCents: 500_650 },
       },
       verdict: { status: "stretched", reasons: ["CAR_COST_SHARE_HIGH"] },
-      maxAffordablePriceCents: 16_800_000,
+      maxAffordablePrice: { priceCents: 16_800_000, limitedBy: "BUDGET" },
     });
   });
 
@@ -77,7 +77,7 @@ describe("evaluateAffordability", () => {
       monthlyCarCostCents: 500_650,
       breakdown: { finance: null },
       verdict: { status: "comfortable", reasons: [] },
-      maxAffordablePriceCents: 119_600_000,
+      maxAffordablePrice: { priceCents: 119_600_000, limitedBy: "BUDGET" },
     });
   });
 
@@ -97,14 +97,11 @@ describe("evaluateAffordability", () => {
   ])(
     "returns a max price for $name that is comfortable but not R1,000 more",
     ({ overrides }) => {
-      const { maxAffordablePriceCents } = evaluate(overrides);
-      const atMax = evaluateAtPrice(overrides, maxAffordablePriceCents);
-      const aboveMax = evaluateAtPrice(
-        overrides,
-        maxAffordablePriceCents + 100_000,
-      );
+      const { priceCents } = evaluate(overrides).maxAffordablePrice;
+      const atMax = evaluateAtPrice(overrides, priceCents);
+      const aboveMax = evaluateAtPrice(overrides, priceCents + 100_000);
 
-      expect(maxAffordablePriceCents).toBeGreaterThan(0);
+      expect(priceCents).toBeGreaterThan(0);
       expect(atMax.verdict.status).toBe("comfortable");
       expect(atMax.breakdown.finance?.validation.errors ?? []).toEqual([]);
       expect(aboveMax.verdict.status).not.toBe("comfortable");
@@ -123,7 +120,26 @@ describe("evaluateAffordability", () => {
         },
         reasons: ["BUFFER_LOW"],
       },
-      maxAffordablePriceCents: 0,
+      maxAffordablePrice: {
+        priceCents: 0,
+        limitedBy: "EXPENSES_EXCEED_INCOME",
+      },
+    });
+  });
+
+  it("explains a max price of 0 caused by the finance rules", () => {
+    expect(
+      evaluate({
+        vehicle: { ...affordabilityValues.vehicle, priceCents: 160_000_000 },
+        purchase: { ...financedPurchase, depositCents: 150_000_000 },
+      }),
+    ).toMatchObject({
+      verdict: { status: "stretched" },
+      maxAffordablePrice: {
+        priceCents: 0,
+        limitedBy: "FINANCE_RULES",
+        blockingErrorCodes: ["NOTHING_TO_FINANCE"],
+      },
     });
   });
 
@@ -151,8 +167,8 @@ describe("evaluateAffordability", () => {
         runningCostRates,
         verdictThresholds,
         { ...config, maxPriceUpperBoundCents: cents(10_000_000) },
-      ).maxAffordablePriceCents,
-    ).toBe(10_000_000);
+      ).maxAffordablePrice,
+    ).toEqual({ priceCents: 10_000_000, limitedBy: "UPPER_BOUND" });
   });
 
   it.each([

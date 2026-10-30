@@ -31,6 +31,7 @@ export type FinanceWarning = {
 
 export type FinanceIssue = FinanceError | FinanceWarning;
 export type FinanceIssueCode = FinanceIssue["code"];
+export type FinanceErrorCode = FinanceError["code"];
 
 export type FinanceValidation = {
   errors: FinanceError[];

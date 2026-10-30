@@ -1,35 +1,56 @@
 import {
   assessAffordability,
-  type AffordabilityAssessment,
+  calculateCarCost,
   type AssessmentContext,
 } from "../assessment";
+import type { FinanceErrorCode } from "../finance-rules";
 import { CENTS_PER_RAND, cents, randsToCents, type Cents } from "../money";
 import type { AffordabilityInput } from "../schemas";
 
 const PRICE_ROUNDING_RANDS = 1_000;
 
-function assessAtPrice(
+export type MaxAffordablePrice =
+  | {
+      priceCents: Cents;
+      limitedBy: "BUDGET" | "UPPER_BOUND" | "EXPENSES_EXCEED_INCOME";
+    }
+  | {
+      priceCents: Cents;
+      limitedBy: "FINANCE_RULES";
+      blockingErrorCodes: FinanceErrorCode[];
+    };
+
+export type PriceLimit = MaxAffordablePrice["limitedBy"];
+
+function withVehiclePrice(
+  input: AffordabilityInput,
+  priceCents: Cents,
+): AffordabilityInput {
+  return { ...input, vehicle: { ...input.vehicle, priceCents } };
+}
+
+function isComfortableAt(
   input: AffordabilityInput,
   context: AssessmentContext,
   priceCents: Cents,
-): AffordabilityAssessment {
-  return assessAffordability(
-    { ...input, vehicle: { ...input.vehicle, priceCents } },
+): boolean {
+  const { verdict } = assessAffordability(
+    withVehiclePrice(input, priceCents),
     context,
   );
-}
-
-function isComfortable({ verdict }: AffordabilityAssessment): boolean {
   return verdict.status === "comfortable";
 }
 
-function satisfiesFinanceRules({
-  breakdown,
-}: AffordabilityAssessment): boolean {
-  return (
-    breakdown.finance === null ||
-    breakdown.finance.validation.errors.length === 0
-  );
+function financeErrorCodesAt(
+  input: AffordabilityInput,
+  context: AssessmentContext,
+  priceCents: Cents,
+): FinanceErrorCode[] {
+  const { finance } = calculateCarCost(
+    withVehiclePrice(input, priceCents),
+    context,
+  ).breakdown;
+  return finance?.validation.errors.map(({ code }) => code) ?? [];
 }
 
 function highestPassing(
@@ -61,22 +82,29 @@ export function findMaxAffordablePrice(
   input: AffordabilityInput,
   context: AssessmentContext,
   upperBoundCents: Cents,
-): Cents {
-  const highestComfortableRands = highestPassing(
-    0,
-    Math.floor(upperBoundCents / CENTS_PER_RAND),
-    (rands) =>
-      isComfortable(assessAtPrice(input, context, randsToCents(rands))),
+): MaxAffordablePrice {
+  const upperBoundRands = Math.floor(upperBoundCents / CENTS_PER_RAND);
+  const highestComfortableRands = highestPassing(0, upperBoundRands, (rands) =>
+    isComfortableAt(input, context, randsToCents(rands)),
   );
   if (highestComfortableRands === null) {
-    return cents(0);
+    return { priceCents: cents(0), limitedBy: "EXPENSES_EXCEED_INCOME" };
   }
 
-  const candidateCents = randsToCents(
+  const priceCents = randsToCents(
     roundDownToNearest(highestComfortableRands, PRICE_ROUNDING_RANDS),
   );
-  const candidate = assessAtPrice(input, context, candidateCents);
-  return isComfortable(candidate) && satisfiesFinanceRules(candidate)
-    ? candidateCents
-    : cents(0);
+  const blockingErrorCodes = financeErrorCodesAt(input, context, priceCents);
+  if (blockingErrorCodes.length > 0) {
+    return {
+      priceCents: cents(0),
+      limitedBy: "FINANCE_RULES",
+      blockingErrorCodes,
+    };
+  }
+  return {
+    priceCents,
+    limitedBy:
+      highestComfortableRands === upperBoundRands ? "UPPER_BOUND" : "BUDGET",
+  };
 }

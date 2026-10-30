@@ -4,7 +4,10 @@ import {
   type AffordabilityAssessment,
 } from "./assessment";
 import type { FinanceRules } from "./finance-rules";
-import { findMaxAffordablePrice } from "./max-price/find-max-affordable-price";
+import {
+  findMaxAffordablePrice,
+  type MaxAffordablePrice,
+} from "./max-price/find-max-affordable-price";
 import type { Cents } from "./money";
 import {
   affordabilityInputSchema,
@@ -18,7 +21,7 @@ export type AffordabilityConfig = {
 };
 
 export type AffordabilityResult = AffordabilityAssessment & {
-  maxAffordablePriceCents: Cents;
+  maxAffordablePrice: MaxAffordablePrice;
 };
 
 export function evaluateAffordability(
@@ -36,7 +39,7 @@ export function evaluateAffordability(
 
   return {
     ...assessAffordability(parsedInput, context),
-    maxAffordablePriceCents: findMaxAffordablePrice(
+    maxAffordablePrice: findMaxAffordablePrice(
       parsedInput,
       context,
       maxPriceUpperBoundCents,

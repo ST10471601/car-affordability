@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { basisPoints } from "../money";
 import { calculateMonthlyInsurance } from "./insurance";
 import {
   buildRunningCostInput,
@@ -52,7 +53,7 @@ describe("calculateMonthlyInsurance", () => {
     expect(
       calculateMonthlyInsurance(buildRunningCostInput({}), {
         ...runningCostRates,
-        insuranceAnnualRateOfValue: 0.06,
+        insuranceAnnualRateBps: basisPoints(600),
       }),
     ).toBe(150_000);
   });

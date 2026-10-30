@@ -10,7 +10,8 @@ const MAX_EARNERS = 2;
 const MIN_NET_MONTHLY_INCOME_CENTS = 100_000;
 const MIN_OWNERSHIP_MONTHS = 1;
 const MAX_OWNERSHIP_MONTHS = 240;
-const MAX_INSURANCE_RATE = 1;
+const MAX_INSURANCE_RATE_BPS = 10_000;
+const MAX_CONSUMPTION_UPLIFT_BPS = 30_000;
 
 function requiredFieldError(label: string): z.core.$ZodErrorMap {
   return (issue) =>
@@ -35,11 +36,11 @@ function nonNegativeCents(label: string) {
   return nonNegativeInteger(label).transform(cents);
 }
 
-function percentageBps(label: string) {
-  const rangeMessage = `${label} must be between 0% and ${MAX_PERCENTAGE_BPS / 100}%.`;
+function percentageBps(label: string, maxBps = MAX_PERCENTAGE_BPS) {
+  const rangeMessage = `${label} must be between 0% and ${maxBps / 100}%.`;
   return requiredInteger(label)
     .min(0, rangeMessage)
-    .max(MAX_PERCENTAGE_BPS, rangeMessage)
+    .max(maxBps, rangeMessage)
     .transform(basisPoints);
 }
 
@@ -228,22 +229,22 @@ export const maintenanceAgeBandsSchema = z
     "Maintenance age bands must be in order of increasing maximum age.",
   );
 
-const insuranceRateRangeMessage = `Insurance rate must be between 0 and ${MAX_INSURANCE_RATE}.`;
+const consumptionUpliftRangeMessage = `Consumption uplift must be between 0% and ${MAX_CONSUMPTION_UPLIFT_BPS / 100}%.`;
 
 export const runningCostRatesSchema = z.object(
   {
     fuelPriceCentsPerLitre: z.record(regionSchema, fuelPricesSchema),
     electricityTariffCentsPerKwh: nonNegativeCents("Electricity tariff"),
-    consumptionUpliftByPowertrain: z.record(
+    consumptionUpliftBpsByPowertrain: z.record(
       powertrainSchema,
-      requiredNumber("Consumption uplift").min(
-        0,
-        "Consumption uplift cannot be negative.",
-      ),
+      nonNegativeInteger("Consumption uplift")
+        .max(MAX_CONSUMPTION_UPLIFT_BPS, consumptionUpliftRangeMessage)
+        .transform(basisPoints),
     ),
-    insuranceAnnualRateOfValue: requiredNumber("Insurance rate")
-      .min(0, insuranceRateRangeMessage)
-      .max(MAX_INSURANCE_RATE, insuranceRateRangeMessage),
+    insuranceAnnualRateBps: percentageBps(
+      "Insurance rate",
+      MAX_INSURANCE_RATE_BPS,
+    ),
     maintenanceCentsPerKmByAgeBand: maintenanceAgeBandsSchema,
     tyreSetCents: nonNegativeCents("Tyre set price"),
     tyreLifeKm: requiredInteger("Tyre life").positive(

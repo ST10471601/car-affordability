@@ -1,4 +1,4 @@
-import { cents } from "../money";
+import { basisPoints, cents } from "../money";
 import type {
   Powertrain,
   Region,
@@ -13,14 +13,14 @@ export const runningCostRates: RunningCostRates = {
     coastal: { petrol: cents(2_100), diesel: cents(1_900) },
   },
   electricityTariffCentsPerKwh: cents(350),
-  consumptionUpliftByPowertrain: {
-    petrol: 0.15,
-    diesel: 0.1,
-    hybrid: 0.25,
-    plugInHybrid: 0.5,
-    electric: 0.2,
+  consumptionUpliftBpsByPowertrain: {
+    petrol: basisPoints(1_500),
+    diesel: basisPoints(1_000),
+    hybrid: basisPoints(2_500),
+    plugInHybrid: basisPoints(5_000),
+    electric: basisPoints(2_000),
   },
-  insuranceAnnualRateOfValue: 0.04,
+  insuranceAnnualRateBps: basisPoints(400),
   maintenanceCentsPerKmByAgeBand: [
     { maxAgeYears: 3, centsPerKm: cents(40) },
     { maxAgeYears: 6, centsPerKm: cents(70) },

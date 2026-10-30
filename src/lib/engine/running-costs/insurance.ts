@@ -1,12 +1,18 @@
-import { MONTHS_PER_YEAR, roundToCents, type Cents } from "../money";
+import {
+  basisPointsToRate,
+  MONTHS_PER_YEAR,
+  roundToCents,
+  type Cents,
+} from "../money";
 import type { RunningCostInput, RunningCostRates } from "../schemas";
 
 function estimateMonthlyPremium(
   { vehicleValueCents }: RunningCostInput,
-  { insuranceAnnualRateOfValue }: RunningCostRates,
+  { insuranceAnnualRateBps }: RunningCostRates,
 ): Cents {
   return roundToCents(
-    (vehicleValueCents * insuranceAnnualRateOfValue) / MONTHS_PER_YEAR,
+    (vehicleValueCents * basisPointsToRate(insuranceAnnualRateBps)) /
+      MONTHS_PER_YEAR,
   );
 }
 

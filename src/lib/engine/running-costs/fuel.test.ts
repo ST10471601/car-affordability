@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { basisPoints } from "../money";
 import { calculateMonthlyFuel } from "./fuel";
 import {
   buildRunningCostInput,
@@ -90,9 +91,9 @@ describe("calculateMonthlyFuel", () => {
   it("uses the uplift from the supplied rates", () => {
     const rates = {
       ...runningCostRates,
-      consumptionUpliftByPowertrain: {
-        ...runningCostRates.consumptionUpliftByPowertrain,
-        petrol: 0,
+      consumptionUpliftBpsByPowertrain: {
+        ...runningCostRates.consumptionUpliftBpsByPowertrain,
+        petrol: basisPoints(0),
       },
     };
     expect(calculateMonthlyFuel(buildRunningCostInput({}), rates)).toBe(

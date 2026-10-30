@@ -1,9 +1,13 @@
 import type { z } from "zod";
 import {
-  assessAffordability,
+  calculateCarCost,
+  determineVerdictForCarCost,
   type AffordabilityAssessment,
+  type AffordabilityBreakdown,
+  type CarCost,
+  type FinanceBreakdown,
 } from "./assessment";
-import type { FinanceRules } from "./finance-rules";
+import type { FinanceError, FinanceRules } from "./finance-rules";
 import {
   findMaxAffordablePrice,
   type MaxAffordablePrice,
@@ -20,9 +24,34 @@ export type AffordabilityConfig = {
   readonly maxPriceUpperBoundCents: Cents;
 };
 
-export type AffordabilityResult = AffordabilityAssessment & {
+export type ValidDealResult = AffordabilityAssessment & {
+  ok: true;
   maxAffordablePrice: MaxAffordablePrice;
 };
+
+export type InvalidFinanceResult = {
+  ok: false;
+  reason: "INVALID_FINANCE";
+  errors: FinanceError[];
+  breakdown: AffordabilityBreakdown & { finance: FinanceBreakdown };
+};
+
+export type AffordabilityResult = ValidDealResult | InvalidFinanceResult;
+
+function invalidFinanceResult({
+  breakdown,
+}: CarCost): InvalidFinanceResult | null {
+  const { finance, runningCosts } = breakdown;
+  if (finance === null || finance.validation.errors.length === 0) {
+    return null;
+  }
+  return {
+    ok: false,
+    reason: "INVALID_FINANCE",
+    errors: finance.validation.errors,
+    breakdown: { finance, runningCosts },
+  };
+}
 
 export function evaluateAffordability(
   input: z.input<typeof affordabilityInputSchema>,
@@ -37,8 +66,20 @@ export function evaluateAffordability(
     financeRules,
   };
 
+  const carCost = calculateCarCost(parsedInput, context);
+  const invalidFinance = invalidFinanceResult(carCost);
+  if (invalidFinance !== null) {
+    return invalidFinance;
+  }
+
   return {
-    ...assessAffordability(parsedInput, context),
+    ok: true,
+    ...carCost,
+    verdict: determineVerdictForCarCost(
+      parsedInput,
+      carCost,
+      context.thresholds,
+    ),
     maxAffordablePrice: findMaxAffordablePrice(
       parsedInput,
       context,

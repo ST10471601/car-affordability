@@ -2,8 +2,14 @@ export {
   evaluateAffordability,
   type AffordabilityConfig,
   type AffordabilityResult,
+  type InvalidFinanceResult,
+  type ValidDealResult,
 } from "./affordability";
-export type { AffordabilityAssessment, FinanceBreakdown } from "./assessment";
+export type {
+  AffordabilityAssessment,
+  AffordabilityBreakdown,
+  FinanceBreakdown,
+} from "./assessment";
 export {
   DEFAULT_AFFORDABILITY_CONFIG,
   DEFAULT_FINANCE_RULES,

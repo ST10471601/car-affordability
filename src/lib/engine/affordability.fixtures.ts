@@ -1,7 +1,34 @@
 import type { z } from "zod";
-import { affordabilityInputSchema, type AffordabilityInput } from "./schemas";
+import type { AssessmentContext } from "./assessment";
+import { basisPoints } from "./money";
+import { runningCostRates } from "./running-costs/running-costs.fixtures";
+import {
+  affordabilityInputSchema,
+  type AffordabilityInput,
+  type VerdictThresholds,
+} from "./schemas";
 
 export type AffordabilityValues = z.input<typeof affordabilityInputSchema>;
+
+export const verdictThresholds: VerdictThresholds = {
+  carCostShare: {
+    comfortableBelowBps: basisPoints(2_000),
+    unaffordableAboveBps: basisPoints(3_000),
+  },
+  buffer: {
+    comfortableFromBps: basisPoints(1_500),
+    unaffordableBelowBps: basisPoints(500),
+  },
+};
+
+export const assessmentContext: AssessmentContext = {
+  rates: runningCostRates,
+  thresholds: verdictThresholds,
+  financeRules: {
+    maxBalloonVehicleAgeYears: 4,
+    balloonWarningBps: basisPoints(3_000),
+  },
+};
 
 export const financedPurchase = {
   method: "finance",

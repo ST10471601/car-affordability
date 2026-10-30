@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_AFFORDABILITY_CONFIG,
   DEFAULT_FINANCE_RULES,
   DEFAULT_VERDICT_THRESHOLDS,
 } from "./engine-defaults";
@@ -36,5 +37,23 @@ describe("DEFAULT_VERDICT_THRESHOLDS", () => {
     expect(Object.isFrozen(DEFAULT_VERDICT_THRESHOLDS)).toBe(true);
     expect(Object.isFrozen(DEFAULT_VERDICT_THRESHOLDS.carCostShare)).toBe(true);
     expect(Object.isFrozen(DEFAULT_VERDICT_THRESHOLDS.buffer)).toBe(true);
+  });
+});
+
+describe("DEFAULT_AFFORDABILITY_CONFIG", () => {
+  it("applies the default finance rules", () => {
+    expect(DEFAULT_AFFORDABILITY_CONFIG.financeRules).toBe(
+      DEFAULT_FINANCE_RULES,
+    );
+  });
+
+  it("searches for a maximum price of up to R5,000,000", () => {
+    expect(DEFAULT_AFFORDABILITY_CONFIG.maxPriceUpperBoundCents).toBe(
+      500_000_000,
+    );
+  });
+
+  it("cannot be mutated at runtime", () => {
+    expect(Object.isFrozen(DEFAULT_AFFORDABILITY_CONFIG)).toBe(true);
   });
 });

@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 import {
+  buildRunningCostInput,
+  runningCostRates,
+} from "./running-costs/running-costs.fixtures";
+import {
   expenseSchema,
   financeFeesSchema,
   frequencySchema,
   incomeSchema,
   purchaseSchema,
   recurringAmountSchema,
+  runningCostInputSchema,
+  runningCostRatesSchema,
   tradeInSchema,
   vehicleSchema,
 } from "./schemas";
@@ -542,6 +548,355 @@ describe("financeFeesSchema", () => {
       input: undefined,
       path: [],
       message: "Enter the finance fees.",
+    },
+  ]);
+});
+
+describe("runningCostRatesSchema", () => {
+  it("accepts a complete set of rates", () => {
+    expect(runningCostRatesSchema.parse(runningCostRates)).toEqual(
+      runningCostRates,
+    );
+  });
+
+  it("accepts a single open-ended maintenance band", () => {
+    const rates = {
+      ...runningCostRates,
+      maintenanceCentsPerKmByAgeBand: [{ maxAgeYears: null, centsPerKm: 80 }],
+    };
+    expect(runningCostRatesSchema.parse(rates)).toEqual(rates);
+  });
+
+  it("accepts free electricity", () => {
+    expect(
+      issuesOf(runningCostRatesSchema, {
+        ...runningCostRates,
+        electricityTariffCentsPerKwh: 0,
+      }),
+    ).toEqual([]);
+  });
+
+  expectRejections(runningCostRatesSchema, [
+    {
+      name: "a region without fuel prices",
+      input: {
+        ...runningCostRates,
+        fuelPriceCentsPerLitre: {
+          inland: runningCostRates.fuelPriceCentsPerLitre.inland,
+        },
+      },
+      path: ["fuelPriceCentsPerLitre", "coastal"],
+      message: "Enter petrol and diesel prices.",
+    },
+    {
+      name: "a negative diesel price",
+      input: {
+        ...runningCostRates,
+        fuelPriceCentsPerLitre: {
+          ...runningCostRates.fuelPriceCentsPerLitre,
+          inland: { petrol: 2_200, diesel: -1 },
+        },
+      },
+      path: ["fuelPriceCentsPerLitre", "inland", "diesel"],
+      message: "Diesel price cannot be negative.",
+    },
+    {
+      name: "a fractional electricity tariff",
+      input: { ...runningCostRates, electricityTariffCentsPerKwh: 350.5 },
+      path: ["electricityTariffCentsPerKwh"],
+      message: "Enter a valid electricity tariff.",
+    },
+    {
+      name: "a powertrain without a consumption uplift",
+      input: {
+        ...runningCostRates,
+        consumptionUpliftByPowertrain: {
+          petrol: 0.15,
+          diesel: 0.1,
+          hybrid: 0.25,
+          electric: 0.2,
+        },
+      },
+      path: ["consumptionUpliftByPowertrain", "plugInHybrid"],
+      message: "Consumption uplift is required.",
+    },
+    {
+      name: "a negative consumption uplift",
+      input: {
+        ...runningCostRates,
+        consumptionUpliftByPowertrain: {
+          ...runningCostRates.consumptionUpliftByPowertrain,
+          electric: -0.05,
+        },
+      },
+      path: ["consumptionUpliftByPowertrain", "electric"],
+      message: "Consumption uplift cannot be negative.",
+    },
+    {
+      name: "a negative insurance rate",
+      input: { ...runningCostRates, insuranceAnnualRateOfValue: -0.01 },
+      path: ["insuranceAnnualRateOfValue"],
+      message: "Insurance rate must be between 0 and 1.",
+    },
+    {
+      name: "an insurance rate above 1",
+      input: { ...runningCostRates, insuranceAnnualRateOfValue: 1.01 },
+      path: ["insuranceAnnualRateOfValue"],
+      message: "Insurance rate must be between 0 and 1.",
+    },
+    {
+      name: "no maintenance bands",
+      input: { ...runningCostRates, maintenanceCentsPerKmByAgeBand: [] },
+      path: ["maintenanceCentsPerKmByAgeBand"],
+      message: "Add at least one maintenance age band.",
+    },
+    {
+      name: "a bounded last maintenance band",
+      input: {
+        ...runningCostRates,
+        maintenanceCentsPerKmByAgeBand: [
+          { maxAgeYears: 3, centsPerKm: 40 },
+          { maxAgeYears: 6, centsPerKm: 70 },
+        ],
+      },
+      path: ["maintenanceCentsPerKmByAgeBand"],
+      message: "The last maintenance age band must be open-ended.",
+    },
+    {
+      name: "an open-ended maintenance band before the last",
+      input: {
+        ...runningCostRates,
+        maintenanceCentsPerKmByAgeBand: [
+          { maxAgeYears: null, centsPerKm: 40 },
+          { maxAgeYears: null, centsPerKm: 70 },
+        ],
+      },
+      path: ["maintenanceCentsPerKmByAgeBand"],
+      message: "Only the last maintenance age band can be open-ended.",
+    },
+    {
+      name: "maintenance bands out of age order",
+      input: {
+        ...runningCostRates,
+        maintenanceCentsPerKmByAgeBand: [
+          { maxAgeYears: 6, centsPerKm: 70 },
+          { maxAgeYears: 3, centsPerKm: 40 },
+          { maxAgeYears: null, centsPerKm: 110 },
+        ],
+      },
+      path: ["maintenanceCentsPerKmByAgeBand"],
+      message:
+        "Maintenance age bands must be in order of increasing maximum age.",
+    },
+    {
+      name: "maintenance bands sharing a maximum age",
+      input: {
+        ...runningCostRates,
+        maintenanceCentsPerKmByAgeBand: [
+          { maxAgeYears: 3, centsPerKm: 40 },
+          { maxAgeYears: 3, centsPerKm: 70 },
+          { maxAgeYears: null, centsPerKm: 110 },
+        ],
+      },
+      path: ["maintenanceCentsPerKmByAgeBand"],
+      message:
+        "Maintenance age bands must be in order of increasing maximum age.",
+    },
+    {
+      name: "a maintenance band without a maximum age",
+      input: {
+        ...runningCostRates,
+        maintenanceCentsPerKmByAgeBand: [
+          { centsPerKm: 40 },
+          { maxAgeYears: null, centsPerKm: 110 },
+        ],
+      },
+      path: ["maintenanceCentsPerKmByAgeBand", 0, "maxAgeYears"],
+      message: "Maximum age is required.",
+    },
+    {
+      name: "a zero tyre life",
+      input: { ...runningCostRates, tyreLifeKm: 0 },
+      path: ["tyreLifeKm"],
+      message: "Tyre life must be greater than zero.",
+    },
+    {
+      name: "a negative licence fee",
+      input: { ...runningCostRates, licenceAnnualCents: -1 },
+      path: ["licenceAnnualCents"],
+      message: "Licence fee cannot be negative.",
+    },
+    {
+      name: "an impossible effective date",
+      input: { ...runningCostRates, effectiveFrom: "2026-13-01" },
+      path: ["effectiveFrom"],
+      message: "Enter a valid effective date.",
+    },
+    {
+      name: "a missing effective date",
+      input: { ...runningCostRates, effectiveFrom: undefined },
+      path: ["effectiveFrom"],
+      message: "Effective date is required.",
+    },
+    {
+      name: "missing rates",
+      input: undefined,
+      path: [],
+      message: "Enter the running cost rates.",
+    },
+  ]);
+});
+
+describe("runningCostInputSchema", () => {
+  const input = buildRunningCostInput({});
+
+  it("accepts input without a service plan or insurance override", () => {
+    expect(runningCostInputSchema.parse(input)).toEqual(input);
+  });
+
+  it("accepts a service plan and an insurance override", () => {
+    const covered = buildRunningCostInput({
+      servicePlan: { remainingMonths: 24, remainingKm: 60_000 },
+      insuranceMonthlyOverrideCents: 85_000,
+    });
+    expect(runningCostInputSchema.parse(covered)).toEqual(covered);
+  });
+
+  it.each(["petrol", "diesel", "hybrid", "plugInHybrid", "electric"])(
+    "accepts a %s powertrain",
+    (powertrain) => {
+      expect(
+        issuesOf(runningCostInputSchema, { ...input, powertrain }),
+      ).toEqual([]);
+    },
+  );
+
+  it.each([
+    { name: "zero kilometres per month", overrides: { kmPerMonth: 0 } },
+    { name: "a one-month ownership period", overrides: { ownershipMonths: 1 } },
+    {
+      name: "a 240-month ownership period",
+      overrides: { ownershipMonths: 240 },
+    },
+    {
+      name: "an expired service plan",
+      overrides: { servicePlan: { remainingMonths: 0, remainingKm: 0 } },
+    },
+    {
+      name: "a zero insurance override",
+      overrides: { insuranceMonthlyOverrideCents: 0 },
+    },
+  ])("accepts $name", ({ overrides }) => {
+    expect(
+      issuesOf(runningCostInputSchema, { ...input, ...overrides }),
+    ).toEqual([]);
+  });
+
+  expectRejections(runningCostInputSchema, [
+    {
+      name: "an unknown powertrain",
+      input: { ...input, powertrain: "hydrogen" },
+      path: ["powertrain"],
+      message: "Choose a powertrain.",
+    },
+    {
+      name: "an unknown region",
+      input: { ...input, region: "northern" },
+      path: ["region"],
+      message: "Choose inland or coastal.",
+    },
+    {
+      name: "zero claimed consumption",
+      input: { ...input, claimedConsumption: 0 },
+      path: ["claimedConsumption"],
+      message: "Claimed consumption must be greater than zero.",
+    },
+    {
+      name: "a non-numeric claimed consumption",
+      input: { ...input, claimedConsumption: "7" },
+      path: ["claimedConsumption"],
+      message: "Enter a valid claimed consumption.",
+    },
+    {
+      name: "a zero vehicle value",
+      input: { ...input, vehicleValueCents: 0 },
+      path: ["vehicleValueCents"],
+      message: "Vehicle value must be greater than zero.",
+    },
+    {
+      name: "a negative vehicle age",
+      input: { ...input, vehicleAgeYearsAtPurchase: -1 },
+      path: ["vehicleAgeYearsAtPurchase"],
+      message: "Vehicle age cannot be negative.",
+    },
+    {
+      name: "a fractional vehicle age",
+      input: { ...input, vehicleAgeYearsAtPurchase: 2.5 },
+      path: ["vehicleAgeYearsAtPurchase"],
+      message: "Enter a valid vehicle age.",
+    },
+    {
+      name: "negative kilometres per month",
+      input: { ...input, kmPerMonth: -1 },
+      path: ["kmPerMonth"],
+      message: "Monthly distance cannot be negative.",
+    },
+    {
+      name: "fractional kilometres per month",
+      input: { ...input, kmPerMonth: 1_666.67 },
+      path: ["kmPerMonth"],
+      message: "Enter a valid monthly distance.",
+    },
+    {
+      name: "a zero ownership period",
+      input: { ...input, ownershipMonths: 0 },
+      path: ["ownershipMonths"],
+      message: "Ownership period must be between 1 and 240 months.",
+    },
+    {
+      name: "an ownership period above 240 months",
+      input: { ...input, ownershipMonths: 241 },
+      path: ["ownershipMonths"],
+      message: "Ownership period must be between 1 and 240 months.",
+    },
+    {
+      name: "a missing ownership period",
+      input: { ...input, ownershipMonths: undefined },
+      path: ["ownershipMonths"],
+      message: "Ownership period is required.",
+    },
+    {
+      name: "a missing service plan",
+      input: { ...input, servicePlan: undefined },
+      path: ["servicePlan"],
+      message: "Enter the service plan details.",
+    },
+    {
+      name: "a negative remaining service plan term",
+      input: { ...input, servicePlan: { remainingMonths: -1, remainingKm: 0 } },
+      path: ["servicePlan", "remainingMonths"],
+      message: "Remaining service plan term cannot be negative.",
+    },
+    {
+      name: "a fractional remaining service plan distance",
+      input: {
+        ...input,
+        servicePlan: { remainingMonths: 12, remainingKm: 0.5 },
+      },
+      path: ["servicePlan", "remainingKm"],
+      message: "Enter a valid remaining service plan distance.",
+    },
+    {
+      name: "a negative insurance override",
+      input: { ...input, insuranceMonthlyOverrideCents: -1 },
+      path: ["insuranceMonthlyOverrideCents"],
+      message: "Insurance premium cannot be negative.",
+    },
+    {
+      name: "missing input",
+      input: undefined,
+      path: [],
+      message: "Enter the running cost details.",
     },
   ]);
 });

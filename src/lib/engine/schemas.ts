@@ -6,20 +6,31 @@ const MAX_TERM_MONTHS = 84;
 const TERM_MONTHS_STEP = 12;
 const MAX_PERCENTAGE_BPS = 10_000;
 const MAX_EARNERS = 2;
+const MIN_OWNERSHIP_MONTHS = 1;
+const MAX_OWNERSHIP_MONTHS = 240;
+const MAX_INSURANCE_RATE = 1;
+
+function requiredFieldError(label: string): z.core.$ZodErrorMap {
+  return (issue) =>
+    issue.input === undefined
+      ? `${label} is required.`
+      : `Enter a valid ${label.toLowerCase()}.`;
+}
 
 function requiredInteger(label: string) {
-  return z.int({
-    error: (issue) =>
-      issue.input === undefined
-        ? `${label} is required.`
-        : `Enter a valid ${label.toLowerCase()}.`,
-  });
+  return z.int({ error: requiredFieldError(label) });
+}
+
+function requiredNumber(label: string) {
+  return z.number({ error: requiredFieldError(label) });
+}
+
+function nonNegativeInteger(label: string) {
+  return requiredInteger(label).min(0, `${label} cannot be negative.`);
 }
 
 function nonNegativeCents(label: string) {
-  return requiredInteger(label)
-    .min(0, `${label} cannot be negative.`)
-    .transform(cents);
+  return nonNegativeInteger(label).transform(cents);
 }
 
 export const frequencySchema = z.enum(["monthly", "annual"], {
@@ -134,6 +145,125 @@ export const financeFeesSchema = z.object(
   { error: "Enter the finance fees." },
 );
 
+export const powertrainSchema = z.enum(
+  ["petrol", "diesel", "hybrid", "plugInHybrid", "electric"],
+  { error: "Choose a powertrain." },
+);
+
+export const regionSchema = z.enum(["inland", "coastal"], {
+  error: "Choose inland or coastal.",
+});
+
+export const fuelPricesSchema = z.object(
+  {
+    petrol: nonNegativeCents("Petrol price"),
+    diesel: nonNegativeCents("Diesel price"),
+  },
+  { error: "Enter petrol and diesel prices." },
+);
+
+export const maintenanceAgeBandSchema = z.object(
+  {
+    maxAgeYears: nonNegativeInteger("Maximum age").nullable(),
+    centsPerKm: nonNegativeCents("Maintenance cost per kilometre"),
+  },
+  { error: "Enter the maintenance age band." },
+);
+
+type AgeLimited = { maxAgeYears: number | null };
+
+function endsOpenEnded(bands: readonly AgeLimited[]) {
+  return bands.at(-1)?.maxAgeYears === null;
+}
+
+function boundsEveryEarlierBand(bands: readonly AgeLimited[]) {
+  return bands.slice(0, -1).every(({ maxAgeYears }) => maxAgeYears !== null);
+}
+
+function ascendsByMaxAge(bands: readonly AgeLimited[]) {
+  const limits = bands.flatMap(({ maxAgeYears }) =>
+    maxAgeYears === null ? [] : [maxAgeYears],
+  );
+  return limits.every((limit, index) => {
+    const previous = limits[index - 1];
+    return previous === undefined || limit > previous;
+  });
+}
+
+export const maintenanceAgeBandsSchema = z
+  .array(maintenanceAgeBandSchema, {
+    error: "Enter the maintenance age bands.",
+  })
+  .min(1, { error: "Add at least one maintenance age band.", abort: true })
+  .refine(endsOpenEnded, "The last maintenance age band must be open-ended.")
+  .refine(
+    boundsEveryEarlierBand,
+    "Only the last maintenance age band can be open-ended.",
+  )
+  .refine(
+    ascendsByMaxAge,
+    "Maintenance age bands must be in order of increasing maximum age.",
+  );
+
+const insuranceRateRangeMessage = `Insurance rate must be between 0 and ${MAX_INSURANCE_RATE}.`;
+
+export const runningCostRatesSchema = z.object(
+  {
+    fuelPriceCentsPerLitre: z.record(regionSchema, fuelPricesSchema),
+    electricityTariffCentsPerKwh: nonNegativeCents("Electricity tariff"),
+    consumptionUpliftByPowertrain: z.record(
+      powertrainSchema,
+      requiredNumber("Consumption uplift").min(
+        0,
+        "Consumption uplift cannot be negative.",
+      ),
+    ),
+    insuranceAnnualRateOfValue: requiredNumber("Insurance rate")
+      .min(0, insuranceRateRangeMessage)
+      .max(MAX_INSURANCE_RATE, insuranceRateRangeMessage),
+    maintenanceCentsPerKmByAgeBand: maintenanceAgeBandsSchema,
+    tyreSetCents: nonNegativeCents("Tyre set price"),
+    tyreLifeKm: requiredInteger("Tyre life").positive(
+      "Tyre life must be greater than zero.",
+    ),
+    licenceAnnualCents: nonNegativeCents("Licence fee"),
+    effectiveFrom: z.iso.date({ error: requiredFieldError("Effective date") }),
+  },
+  { error: "Enter the running cost rates." },
+);
+
+export const servicePlanSchema = z.object(
+  {
+    remainingMonths: nonNegativeInteger("Remaining service plan term"),
+    remainingKm: nonNegativeInteger("Remaining service plan distance"),
+  },
+  { error: "Enter the service plan details." },
+);
+
+const ownershipRangeMessage = `Ownership period must be between ${MIN_OWNERSHIP_MONTHS} and ${MAX_OWNERSHIP_MONTHS} months.`;
+
+export const runningCostInputSchema = z.object(
+  {
+    powertrain: powertrainSchema,
+    claimedConsumption: requiredNumber("Claimed consumption").positive(
+      "Claimed consumption must be greater than zero.",
+    ),
+    region: regionSchema,
+    vehicleValueCents: requiredInteger("Vehicle value")
+      .positive("Vehicle value must be greater than zero.")
+      .transform(cents),
+    vehicleAgeYearsAtPurchase: nonNegativeInteger("Vehicle age"),
+    kmPerMonth: nonNegativeInteger("Monthly distance"),
+    ownershipMonths: requiredInteger("Ownership period")
+      .min(MIN_OWNERSHIP_MONTHS, ownershipRangeMessage)
+      .max(MAX_OWNERSHIP_MONTHS, ownershipRangeMessage),
+    servicePlan: servicePlanSchema.nullable(),
+    insuranceMonthlyOverrideCents:
+      nonNegativeCents("Insurance premium").optional(),
+  },
+  { error: "Enter the running cost details." },
+);
+
 export type Frequency = z.infer<typeof frequencySchema>;
 export type RecurringAmount = z.infer<typeof recurringAmountSchema>;
 export type Income = z.infer<typeof incomeSchema>;
@@ -145,3 +275,10 @@ export type CashPurchase = z.infer<typeof cashPurchaseSchema>;
 export type FinancePurchase = z.infer<typeof financePurchaseSchema>;
 export type Purchase = z.infer<typeof purchaseSchema>;
 export type FinanceFees = z.infer<typeof financeFeesSchema>;
+export type Powertrain = z.infer<typeof powertrainSchema>;
+export type Region = z.infer<typeof regionSchema>;
+export type FuelPrices = z.infer<typeof fuelPricesSchema>;
+export type MaintenanceAgeBand = z.infer<typeof maintenanceAgeBandSchema>;
+export type RunningCostRates = z.infer<typeof runningCostRatesSchema>;
+export type ServicePlan = z.infer<typeof servicePlanSchema>;
+export type RunningCostInput = z.infer<typeof runningCostInputSchema>;

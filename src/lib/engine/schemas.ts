@@ -33,6 +33,18 @@ function nonNegativeCents(label: string) {
   return nonNegativeInteger(label).transform(cents);
 }
 
+function percentageBps(label: string) {
+  const rangeMessage = `${label} must be between 0% and ${MAX_PERCENTAGE_BPS / 100}%.`;
+  return requiredInteger(label)
+    .min(0, rangeMessage)
+    .max(MAX_PERCENTAGE_BPS, rangeMessage)
+    .transform(basisPoints);
+}
+
+const onlyWhenValid = {
+  when: (payload: z.core.ParsePayload) => payload.issues.length === 0,
+};
+
 export const frequencySchema = z.enum(["monthly", "annual"], {
   error: "Choose monthly or annual.",
 });
@@ -264,6 +276,52 @@ export const runningCostInputSchema = z.object(
   { error: "Enter the running cost details." },
 );
 
+export const verdictThresholdsSchema = z.object(
+  {
+    carCostShare: z
+      .object(
+        {
+          comfortableBelowBps: percentageBps(
+            "Comfortable car cost share limit",
+          ),
+          unaffordableAboveBps: percentageBps(
+            "Unaffordable car cost share limit",
+          ),
+        },
+        { error: "Enter the car cost share thresholds." },
+      )
+      .refine(
+        ({ comfortableBelowBps, unaffordableAboveBps }) =>
+          comfortableBelowBps <= unaffordableAboveBps,
+        {
+          message:
+            "The comfortable car cost share limit cannot exceed the unaffordable limit.",
+          path: ["comfortableBelowBps"],
+          ...onlyWhenValid,
+        },
+      ),
+    buffer: z
+      .object(
+        {
+          comfortableFromBps: percentageBps("Comfortable buffer limit"),
+          unaffordableBelowBps: percentageBps("Unaffordable buffer limit"),
+        },
+        { error: "Enter the buffer thresholds." },
+      )
+      .refine(
+        ({ comfortableFromBps, unaffordableBelowBps }) =>
+          comfortableFromBps >= unaffordableBelowBps,
+        {
+          message:
+            "The comfortable buffer limit cannot be below the unaffordable limit.",
+          path: ["comfortableFromBps"],
+          ...onlyWhenValid,
+        },
+      ),
+  },
+  { error: "Enter the verdict thresholds." },
+);
+
 export type Frequency = z.infer<typeof frequencySchema>;
 export type RecurringAmount = z.infer<typeof recurringAmountSchema>;
 export type Income = z.infer<typeof incomeSchema>;
@@ -282,3 +340,4 @@ export type MaintenanceAgeBand = z.infer<typeof maintenanceAgeBandSchema>;
 export type RunningCostRates = z.infer<typeof runningCostRatesSchema>;
 export type ServicePlan = z.infer<typeof servicePlanSchema>;
 export type RunningCostInput = z.infer<typeof runningCostInputSchema>;
+export type VerdictThresholds = z.infer<typeof verdictThresholdsSchema>;

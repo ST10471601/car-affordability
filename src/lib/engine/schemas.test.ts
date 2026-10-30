@@ -15,6 +15,7 @@ import {
   runningCostRatesSchema,
   tradeInSchema,
   vehicleSchema,
+  verdictThresholdsSchema,
 } from "./schemas";
 
 type Rejection = {
@@ -897,6 +898,105 @@ describe("runningCostInputSchema", () => {
       input: undefined,
       path: [],
       message: "Enter the running cost details.",
+    },
+  ]);
+});
+
+describe("verdictThresholdsSchema", () => {
+  const thresholds = {
+    carCostShare: { comfortableBelowBps: 2_000, unaffordableAboveBps: 3_000 },
+    buffer: { comfortableFromBps: 1_500, unaffordableBelowBps: 500 },
+  };
+
+  it("accepts ordered thresholds", () => {
+    expect(verdictThresholdsSchema.parse(thresholds)).toEqual(thresholds);
+  });
+
+  it("accepts comfortable and unaffordable limits that coincide", () => {
+    const coinciding = {
+      carCostShare: { comfortableBelowBps: 2_500, unaffordableAboveBps: 2_500 },
+      buffer: { comfortableFromBps: 1_000, unaffordableBelowBps: 1_000 },
+    };
+    expect(verdictThresholdsSchema.parse(coinciding)).toEqual(coinciding);
+  });
+
+  expectRejections(verdictThresholdsSchema, [
+    {
+      name: "a comfortable car cost share limit above the unaffordable limit",
+      input: {
+        ...thresholds,
+        carCostShare: {
+          comfortableBelowBps: 3_001,
+          unaffordableAboveBps: 3_000,
+        },
+      },
+      path: ["carCostShare", "comfortableBelowBps"],
+      message:
+        "The comfortable car cost share limit cannot exceed the unaffordable limit.",
+    },
+    {
+      name: "a comfortable buffer limit below the unaffordable limit",
+      input: {
+        ...thresholds,
+        buffer: { comfortableFromBps: 499, unaffordableBelowBps: 500 },
+      },
+      path: ["buffer", "comfortableFromBps"],
+      message:
+        "The comfortable buffer limit cannot be below the unaffordable limit.",
+    },
+    {
+      name: "a car cost share limit above 100%",
+      input: {
+        ...thresholds,
+        carCostShare: {
+          comfortableBelowBps: 2_000,
+          unaffordableAboveBps: 10_001,
+        },
+      },
+      path: ["carCostShare", "unaffordableAboveBps"],
+      message: "Unaffordable car cost share limit must be between 0% and 100%.",
+    },
+    {
+      name: "a comfortable car cost share limit above 100% and its limit",
+      input: {
+        ...thresholds,
+        carCostShare: {
+          comfortableBelowBps: 10_001,
+          unaffordableAboveBps: 3_000,
+        },
+      },
+      path: ["carCostShare", "comfortableBelowBps"],
+      message: "Comfortable car cost share limit must be between 0% and 100%.",
+    },
+    {
+      name: "a negative buffer limit",
+      input: {
+        ...thresholds,
+        buffer: { comfortableFromBps: 1_500, unaffordableBelowBps: -1 },
+      },
+      path: ["buffer", "unaffordableBelowBps"],
+      message: "Unaffordable buffer limit must be between 0% and 100%.",
+    },
+    {
+      name: "a fractional buffer limit",
+      input: {
+        ...thresholds,
+        buffer: { comfortableFromBps: 1_500.5, unaffordableBelowBps: 500 },
+      },
+      path: ["buffer", "comfortableFromBps"],
+      message: "Enter a valid comfortable buffer limit.",
+    },
+    {
+      name: "missing buffer thresholds",
+      input: { carCostShare: thresholds.carCostShare },
+      path: ["buffer"],
+      message: "Enter the buffer thresholds.",
+    },
+    {
+      name: "missing thresholds",
+      input: undefined,
+      path: [],
+      message: "Enter the verdict thresholds.",
     },
   ]);
 });

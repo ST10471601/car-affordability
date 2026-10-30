@@ -33,12 +33,17 @@ export type FinanceBreakdown = FinanceResult & {
   validation: FinanceValidation;
 };
 
-export type AffordabilityAssessment = {
+export type AffordabilityBreakdown = {
+  finance: FinanceBreakdown | null;
+  runningCosts: RunningCostsResult;
+};
+
+export type CarCost = {
   monthlyCarCostCents: Cents;
-  breakdown: {
-    finance: FinanceBreakdown | null;
-    runningCosts: RunningCostsResult;
-  };
+  breakdown: AffordabilityBreakdown;
+};
+
+export type AffordabilityAssessment = CarCost & {
   verdict: Verdict;
 };
 
@@ -86,27 +91,43 @@ function assessFinance(
   };
 }
 
-export function assessAffordability(
+export function calculateCarCost(
   input: AffordabilityInput,
-  { rates, thresholds, financeRules }: AssessmentContext,
-): AffordabilityAssessment {
+  { rates, financeRules }: Pick<AssessmentContext, "rates" | "financeRules">,
+): CarCost {
   const finance = assessFinance(input, financeRules);
   const runningCosts = summariseRunningCosts(toRunningCostInput(input), rates);
-  const monthlyCarCostCents = cents(
-    (finance?.monthlyInstalmentCents ?? 0) +
-      runningCosts.totalMonthlyAverageCents,
-  );
-
   return {
-    monthlyCarCostCents,
-    breakdown: { finance, runningCosts },
-    verdict: determineVerdict(
-      {
-        netIncomeCents: calculateNetMonthlyIncome(input.income),
-        expensesCents: calculateMonthlyExpenses(input.expenses),
-        carCostCents: monthlyCarCostCents,
-      },
-      thresholds,
+    monthlyCarCostCents: cents(
+      (finance?.monthlyInstalmentCents ?? 0) +
+        runningCosts.totalMonthlyAverageCents,
     ),
+    breakdown: { finance, runningCosts },
+  };
+}
+
+export function determineVerdictForCarCost(
+  input: AffordabilityInput,
+  { monthlyCarCostCents }: CarCost,
+  thresholds: VerdictThresholds,
+): Verdict {
+  return determineVerdict(
+    {
+      netIncomeCents: calculateNetMonthlyIncome(input.income),
+      expensesCents: calculateMonthlyExpenses(input.expenses),
+      carCostCents: monthlyCarCostCents,
+    },
+    thresholds,
+  );
+}
+
+export function assessAffordability(
+  input: AffordabilityInput,
+  context: AssessmentContext,
+): AffordabilityAssessment {
+  const carCost = calculateCarCost(input, context);
+  return {
+    ...carCost,
+    verdict: determineVerdictForCarCost(input, carCost, context.thresholds),
   };
 }

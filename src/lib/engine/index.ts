@@ -2,8 +2,14 @@ export {
   evaluateAffordability,
   type AffordabilityConfig,
   type AffordabilityResult,
+  type InvalidFinanceResult,
+  type ValidDealResult,
 } from "./affordability";
-export type { AffordabilityAssessment, FinanceBreakdown } from "./assessment";
+export type {
+  AffordabilityAssessment,
+  AffordabilityBreakdown,
+  FinanceBreakdown,
+} from "./assessment";
 export {
   DEFAULT_AFFORDABILITY_CONFIG,
   DEFAULT_FINANCE_RULES,
@@ -12,12 +18,17 @@ export {
 export type { FinanceResult } from "./finance";
 export type {
   FinanceError,
+  FinanceErrorCode,
   FinanceIssue,
   FinanceIssueCode,
   FinanceRules,
   FinanceValidation,
   FinanceWarning,
 } from "./finance-rules";
+export type {
+  MaxAffordablePrice,
+  PriceLimit,
+} from "./max-price/find-max-affordable-price";
 export type { BasisPoints, Cents } from "./money";
 export {
   calculateRunningCosts,

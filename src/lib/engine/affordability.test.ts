@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { ZodError } from "zod";
-import { evaluateAffordability } from "./affordability";
 import {
   affordabilityValues,
   affordabilityValuesWith,
@@ -10,6 +9,11 @@ import {
   verdictThresholds,
   type AffordabilityValues,
 } from "./affordability.fixtures";
+import {
+  DEFAULT_AFFORDABILITY_CONFIG,
+  DEFAULT_VERDICT_THRESHOLDS,
+  evaluateAffordability,
+} from "./index";
 import { cents } from "./money";
 import { runningCostRates } from "./running-costs/running-costs.fixtures";
 
@@ -55,6 +59,17 @@ describe("evaluateAffordability", () => {
       verdict: { status: "stretched", reasons: ["CAR_COST_SHARE_HIGH"] },
       maxAffordablePriceCents: 16_800_000,
     });
+  });
+
+  it("gives the same result with the engine defaults", () => {
+    expect(
+      evaluateAffordability(
+        affordabilityValues,
+        runningCostRates,
+        DEFAULT_VERDICT_THRESHOLDS,
+        DEFAULT_AFFORDABILITY_CONFIG,
+      ),
+    ).toEqual(evaluate({}));
   });
 
   it("finds a cash purchase comfortable where finance is stretched", () => {

@@ -35,6 +35,13 @@ pnpm dev
 | `pnpm db:lint`      | Lint the local database, failing on warnings                 |
 | `pnpm db:migration` | Create a migration, e.g. `pnpm db:migration create_listings` |
 
+## Database deployment
+
+Pushing migrations to `main` runs the Deploy database workflow, which links the Supabase project and runs `supabase db push`. It can also be started manually. It uses the `production` GitHub Environment, which needs:
+
+- secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`
+- variable `SUPABASE_PROJECT_REF`
+
 ## Repository layout
 
 - `src/` — Next.js application

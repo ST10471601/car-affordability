@@ -8,10 +8,14 @@ import {
   type AffordabilityValues,
 } from "../affordability.fixtures";
 import { calculateCarCost } from "../assessment";
+import { buildFinanceInput, type FinanceScenario } from "../finance.fixtures";
+import { validateFinance, type FinanceErrorCode } from "../finance-rules";
 import { cents } from "../money";
 import { findMaxAffordablePrice } from "./find-max-affordable-price";
 
 const UPPER_BOUND_CENTS = cents(500_000_000);
+const SWEEP_STEP_CENTS = 1_000_000;
+const CURRENT_YEAR = 2026;
 
 function findMax(
   overrides: Partial<AffordabilityValues>,
@@ -155,5 +159,100 @@ describe("findMaxAffordablePrice", () => {
         ],
       });
     });
+  });
+});
+
+describe("assumption: finance rules only fail below a price threshold — a rule that can fail at high prices requires changing the max-price search", () => {
+  const sweptPricesCents = Array.from(
+    { length: UPPER_BOUND_CENTS / SWEEP_STEP_CENTS + 1 },
+    (_, step) => step * SWEEP_STEP_CENTS,
+  );
+
+  const deals: { name: string; scenario: FinanceScenario }[] = [
+    { name: "no deposit or balloon", scenario: {} },
+    { name: "a deposit", scenario: { depositCents: 10_000_000 } },
+    {
+      name: "a deposit, a balloon and an initiation fee",
+      scenario: {
+        depositCents: 10_000_000,
+        balloonBps: 3_000,
+        initiationFeeCents: 120_750,
+      },
+    },
+    {
+      name: "trade-in equity and a large balloon",
+      scenario: {
+        tradeIn: { valueCents: 8_000_000, settlementCents: 0 },
+        balloonBps: 5_000,
+      },
+    },
+    {
+      name: "negative trade-in equity and a balloon",
+      scenario: {
+        tradeIn: { valueCents: 5_000_000, settlementCents: 7_000_000 },
+        balloonBps: 3_500,
+      },
+    },
+    {
+      name: "a full balloon",
+      scenario: { depositCents: 1_000_000, balloonBps: 10_000 },
+    },
+    {
+      name: "a balloon on a vehicle past the age limit",
+      scenario: { modelYear: 2020, balloonBps: 2_500 },
+    },
+    {
+      name: "a deposit on a vehicle past the balloon age limit",
+      scenario: { modelYear: 2020, depositCents: 5_000_000 },
+    },
+  ];
+
+  function errorCodesAtPrice(
+    scenario: FinanceScenario,
+    priceCents: number,
+  ): FinanceErrorCode[] {
+    return validateFinance(
+      buildFinanceInput({ ...scenario, priceCents }),
+      assessmentContext.financeRules,
+      CURRENT_YEAR,
+    ).errors.map(({ code }) => code);
+  }
+
+  function pricesFailingAboveAPassingPrice(scenario: FinanceScenario) {
+    const sweep = sweptPricesCents.map((priceCents) => ({
+      priceCents,
+      passes: errorCodesAtPrice(scenario, priceCents).length === 0,
+    }));
+    const firstPassing = sweep.findIndex(({ passes }) => passes);
+    return firstPassing === -1
+      ? []
+      : sweep
+          .slice(firstPassing)
+          .filter(({ passes }) => !passes)
+          .map(({ priceCents }) => priceCents);
+  }
+
+  it.each(deals)(
+    "never fails a price above one that passes for $name",
+    ({ scenario }) => {
+      expect(pricesFailingAboveAPassingPrice(scenario)).toEqual([]);
+    },
+  );
+
+  it("sweeps every finance error code the rules can raise", () => {
+    const raisedCodes = new Set(
+      deals.flatMap(({ scenario }) =>
+        sweptPricesCents.flatMap((priceCents) =>
+          errorCodesAtPrice(scenario, priceCents),
+        ),
+      ),
+    );
+    expect(raisedCodes).toEqual(
+      new Set([
+        "NOTHING_TO_FINANCE",
+        "BALLOON_EXCEEDS_PRINCIPAL",
+        "BALLOON_NOT_ALLOWED_FOR_AGE",
+      ]),
+    );
   });
 });
